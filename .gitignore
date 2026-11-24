@@ -1,0 +1,12 @@
+# Logs e resultados gerados pelas ferramentas
+*.log
+recon_*.txt
+enum_smb_*.txt
+resultado_*.log
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# Mantém a pasta images versionada mesmo vazia
+!images/.gitkeep
