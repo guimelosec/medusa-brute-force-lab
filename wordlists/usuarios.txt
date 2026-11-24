@@ -1,0 +1,12 @@
+root
+admin
+administrator
+msfadmin
+user
+test
+guest
+ftp
+service
+operator
+suporte
+ti
